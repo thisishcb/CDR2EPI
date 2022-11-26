@@ -63,28 +63,18 @@ blosum50_20aa = {
         'V': np.array((0,-3,-3,-4,-1,-3,-3,-4,-4,4,1,-3,1,-1,-3,-2,0,-3,-1,5))
     }
 
-def positional_coding(aa_seqs, tokens, max_seq_len):
+def positional_coding(aa_seqs, tk_dict, max_seq_len):
     sequences=[]
     for seq in aa_seqs:
-        e_seq=np.zeros((len(seq),len(blosum["A"])))
-        count=0
+        e_seq=np.zeros(max_seq_len)
+        cter=0
         for aa in seq:
-            if aa in blosum:
-                e_seq[count]=blosum[aa]
-                count+=1
-            else:
-                sys.stderr.write("Unknown amino acid in peptides: "+ aa +", encoding aborted!\n")
-                sys.exit(2)
+            e_seq[cter] = tk_dict[aa]
+            cter += 1
+        if any(np.isnan(e_seq)):
+            sys.stderr.write("Unknown amino acid in peptides: "+ seq +", encoding aborted!\n")
+            sys.exit(2)
                 
         sequences.append(e_seq)
+    return np.vstack( sequences)
 
-    # pad sequences:
-    #max_seq_len = max([len(x) for x in aa_seqs])
-    n_seqs = len(aa_seqs)
-    n_features = sequences[0].shape[1]
-
-    enc_aa_seq = np.zeros((n_seqs, max_seq_len, n_features))
-    for i in range(0,n_seqs):
-        enc_aa_seq[i, :sequences[i].shape[0], :n_features] = sequences[i]
-
-    return enc_aa_seq
