@@ -78,3 +78,21 @@ def positional_coding(aa_seqs, tk_dict, max_seq_len):
         sequences.append(e_seq)
     return np.vstack( sequences)
 
+def ept_coding(aa_seqs, tk_dict, max_seq_len=13,train=False, label=False):
+    sequences=[]
+    for seq in aa_seqs:
+        e_seq=np.zeros(max_seq_len)
+        e_seq[0] = 1 if train else 0
+        cter = 1 if train else 0
+        for aa in seq:
+            if cter < max_seq_len:
+                e_seq[cter] = tk_dict[aa]
+            cter += 1
+        if label and cter < max_seq_len:
+            e_seq[cter]=2
+        if any(np.isnan(e_seq)):
+            sys.stderr.write("Unknown amino acid in peptides: "+ seq +", encoding aborted!\n")
+            sys.exit(2)
+                
+        sequences.append(e_seq)
+    return np.vstack( sequences)

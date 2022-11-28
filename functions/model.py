@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 import tensorflow as tf
+from .load import positional_coding
 MAX_TOKENS=32
 def positional_encoding(length, depth):
   depth = depth/2
@@ -288,34 +289,46 @@ def masked_accuracy(label, pred):
   mask = tf.cast(mask, dtype=tf.float32)
   return tf.reduce_sum(match)/tf.reduce_sum(mask)
 
+def seq_pos_coding(seqs, tk_dict, max_seq_len):
+  aaenc = positional_coding(seqs, tk_dict, max_seq_len)
+  aaenc = np.concatenate(aaenc)
+  return  tf.convert_to_tensor(aaenc)
+
+def tk2seq(seqs, tokens):
+  seqTk=[tokens[int(i)] for i in seqs]
+  return ''.join(seqTk)
+
 class Translator(tf.Module):
-  def __init__(self, tokenizers, transformer):
-    self.tokenizers = tokenizers
+  def __init__(self, tokendict, tokens, transformer):
+    self.tokendict = tokendict
+    self.tokens = tokens
     self.transformer = transformer
 
-  def __call__(self, sentence, max_length=32):
+  def __call__(self, sentence, max_length=12):
     # The input sentence is Portuguese, hence adding the `[START]` and `[END]` tokens.
-    assert isinstance(sentence, tf.Tensor)
-    if len(sentence.shape) == 0:
+    # Now input (tra,trb) , length <= 30, padded .
+    # assert isinstance(sentence, tf.Tensor)
+    sentence = seq_pos_coding(sentence,self.tokendict, 30)
+    # print(sentence.shape)
+    if len(sentence.shape) < 2:
       sentence = sentence[tf.newaxis]
-
-    sentence = self.tokenizers.pt.tokenize(sentence).to_tensor()
-
     encoder_input = sentence
 
     # As the output language is English, initialize the output with the
     # English `[START]` token.
-    start_end = self.tokenizers.en.tokenize([''])[0]
-    start = start_end[0][tf.newaxis]
-    end = start_end[1][tf.newaxis]
+    # start_end = self.tokenizers.en.tokenize([''])[0]
+    # start = start_end[0][tf.newaxis]
+    # end = start_end[1][tf.newaxis]
 
     # `tf.TensorArray` is required here (instead of a Python list), so that the
     # dynamic-loop can be traced by `tf.function`.
     output_array = tf.TensorArray(dtype=tf.int64, size=0, dynamic_size=True)
-    output_array = output_array.write(0, start)
+    # output_array = output_array.write(0, start)
+    output_array = output_array.write(0, 1)
 
     for i in tf.range(max_length):
       output = tf.transpose(output_array.stack())
+      output = output[tf.newaxis]
       predictions = self.transformer([encoder_input, output], training=False)
 
       # Select the last token from the `seq_len` dimension.
@@ -325,16 +338,18 @@ class Translator(tf.Module):
 
       # Concatenate the `predicted_id` to the output which is given to the
       # decoder as its input.
-      output_array = output_array.write(i+1, predicted_id[0])
+      output_array = output_array.write(i+1, predicted_id[0][0])
 
-      if predicted_id == end:
-        break
+      # if i>1 and predicted_id == 0:
+      #   break
 
     output = tf.transpose(output_array.stack())
     # The output shape is `(1, tokens)`.
-    text = tokenizers.en.detokenize(output)[0]  # Shape: `()`.
+    if len(output.shape) < 2:
+      output = output[tf.newaxis]
+    text = np.apply_along_axis(lambda x: tk2seq(x,self.tokens), 1, output.numpy())  # Shape: `()`.
 
-    tokens = tokenizers.en.lookup(output)[0]
+    # tokens = tokenizers.en.lookup(output)[0]
 
     # `tf.function` prevents us from using the attention_weights that were
     # calculated on the last iteration of the loop.
@@ -342,7 +357,7 @@ class Translator(tf.Module):
     self.transformer([encoder_input, output[:,:-1]], training=False)
     attention_weights = self.transformer.decoder.last_attn_scores
 
-    return text, tokens, attention_weights
+    return text, attention_weights
 
 # def plot_attention_head(in_tokens, translated_tokens, attention):
 #   # The model didn't generate `<START>` in the output. Skip it.
