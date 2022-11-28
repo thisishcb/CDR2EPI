@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import tensorflow as tf
 from .load import positional_coding
-MAX_TOKENS=32
+MAX_TOKENS=14
 def positional_encoding(length, depth):
   depth = depth/2
 
@@ -304,11 +304,11 @@ class Translator(tf.Module):
     self.tokens = tokens
     self.transformer = transformer
 
-  def __call__(self, sentence, max_length=12):
+  def __call__(self, sentence, max_length=14):
     # The input sentence is Portuguese, hence adding the `[START]` and `[END]` tokens.
     # Now input (tra,trb) , length <= 30, padded .
     # assert isinstance(sentence, tf.Tensor)
-    sentence = seq_pos_coding(sentence,self.tokendict, 30)
+    sentence = seq_pos_coding(sentence,self.tokendict, 32)
     # print(sentence.shape)
     if len(sentence.shape) < 2:
       sentence = sentence[tf.newaxis]
@@ -340,14 +340,14 @@ class Translator(tf.Module):
       # decoder as its input.
       output_array = output_array.write(i+1, predicted_id[0][0])
 
-      # if i>1 and predicted_id == 0:
-      #   break
+      if i>1 and predicted_id == 0:
+        break
 
     output = tf.transpose(output_array.stack())
     # The output shape is `(1, tokens)`.
     if len(output.shape) < 2:
       output = output[tf.newaxis]
-    text = np.apply_along_axis(lambda x: tk2seq(x,self.tokens), 1, output.numpy())  # Shape: `()`.
+    text = np.apply_along_axis(lambda x: tk2seq(x,self.tokens), 1, output)  # Shape: `()`.
 
     # tokens = tokenizers.en.lookup(output)[0]
 
@@ -359,35 +359,12 @@ class Translator(tf.Module):
 
     return text, attention_weights
 
-# def plot_attention_head(in_tokens, translated_tokens, attention):
-#   # The model didn't generate `<START>` in the output. Skip it.
-#   translated_tokens = translated_tokens[1:]
+class ExportTranslator(tf.Module):
+  def __init__(self, translator):
+    self.translator = translator
 
-#   ax = plt.gca()
-#   ax.matshow(attention)
-#   ax.set_xticks(range(len(in_tokens)))
-#   ax.set_yticks(range(len(translated_tokens)))
+  @tf.function()
+  def __call__(self, sentence):
+    (result, attention_weights) = self.translator(sentence)
 
-#   labels = [label.decode('utf-8') for label in in_tokens.numpy()]
-#   ax.set_xticklabels(
-#       labels, rotation=90)
-
-#   labels = [label.decode('utf-8') for label in translated_tokens.numpy()]
-#   ax.set_yticklabels(labels)
-
-# def plot_attention_weights(sentence, translated_tokens, attention_heads):
-#   in_tokens = tf.convert_to_tensor([sentence])
-#   in_tokens = tokenizers.pt.tokenize(in_tokens).to_tensor()
-#   in_tokens = tokenizers.pt.lookup(in_tokens)[0]
-
-#   fig = plt.figure(figsize=(16, 8))
-
-#   for h, head in enumerate(attention_heads):
-#     ax = fig.add_subplot(2, 4, h+1)
-
-#     plot_attention_head(in_tokens, translated_tokens, head)
-
-#     ax.set_xlabel(f'Head {h+1}')
-
-#   plt.tight_layout()
-#   plt.show()
+    return result
