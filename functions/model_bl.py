@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 import tensorflow as tf
+from positional_encodings.tf_encodings import TFPositionalEncoding1D
 from .load import positional_coding
 MAX_TOKENS=14
 def positional_encoding(length, depth):
@@ -23,7 +24,7 @@ class PositionalEmbedding(tf.keras.layers.Layer):
     super().__init__()
     self.d_model = d_model
     self.embedding = tf.keras.layers.Embedding(vocab_size, d_model, mask_zero=True) 
-    self.pos_encoding = positional_encoding(length=2048, depth=d_model)
+    self.pos_encoding = TFPositionalEncoding1D(vocab_size)
 
   def compute_mask(self, *args, **kwargs):
     return self.embedding.compute_mask(*args, **kwargs)
@@ -120,8 +121,7 @@ class Encoder(tf.keras.layers.Layer):
     self.d_model = d_model
     self.num_layers = num_layers
 
-    self.pos_embedding = PositionalEmbedding(
-        vocab_size=vocab_size, d_model=d_model)
+    self.pos_embedding = TFPositionalEncoding1D(vocab_size)
 
     self.enc_layers = [
         EncoderLayer(d_model=d_model,
@@ -182,8 +182,7 @@ class Decoder(tf.keras.layers.Layer):
     self.d_model = d_model
     self.num_layers = num_layers
 
-    self.pos_embedding = PositionalEmbedding(vocab_size=vocab_size,
-                                             d_model=d_model)
+    self.pos_embedding = TFPositionalEncoding1D(vocab_size)
     self.dropout = tf.keras.layers.Dropout(dropout_rate)
     self.dec_layers = [
         DecoderLayer(d_model=d_model, num_heads=num_heads,
